@@ -11,12 +11,7 @@ from piml_classes import GradientLayer
 
 tf.compat.v1.disable_eager_execution()
 """
-It seems like keras doesn't like calling the GradientLayer object within those
-custom layers
-
-Free vibration of a string as described on pg. 49 of the paper.
-
-Solving a wave equation using PIML
+Trying to remove errors and have everything run in graph mode.
 """
 #%%
 class WeightSum(keras.layers.Layer):
@@ -85,14 +80,14 @@ t_interior = keras.layers.Input(batch_input_shape=[64, 1], name='t_interior')
 x_initial = keras.layers.Input(batch_input_shape=[64, 1], name='x_inital')
 t_boundary = keras.layers.Input(batch_input_shape=[64, 1], name='t_boundary')
 
-# model_interior = ModelInterior(model)([x_interior, t_interior])
-# model_initial = ModelInitial(model)(x_initial)
-# model_boundary = ModelBoundary(model)(t_boundary)
-
 # enforcing wave equation on interior
-concat = keras.layers.Concatenate()([x_interior, t_interior])
+concat_interior = keras.layers.Concatenate()([x_interior, t_interior])
 
-w_int = model(concat)
+w_int = model(concat_interior)
+# grads_concat = tf.gradients(w_int, concat_interior)
+# grads2_concat = tf.gradients(grads_concat, concat_interior)[0]
+# d2wdx2 = grads2_concat[:,0:1]
+# d2wdt2 = grads2_concat[:,1:2]
 dwdx = GradientLayer()([w_int, x_interior])
 d2wdx2 = GradientLayer()([dwdx, x_interior])
 dwdt = GradientLayer()([w_int, t_interior])
@@ -120,14 +115,12 @@ w_boundary1 = model(concat1)
 e_bound = tf.square(w_boundary0) + tf.square(w_boundary1)
 
 loss = WeightSum(rhof, rho0, rhob)([e_int, e_init, e_bound])
-grads = GradientLayer()([loss, model.weights])
 
 training_model = keras.Model(
     inputs=[x_interior, t_interior, x_initial, t_boundary],
-    outputs=[loss, grads]
+    outputs=[loss]
 )
 #%%
-
 optimizer = keras.optimizers.legacy.Adam(learning_rate=.01)
 identityloss = IdentityLoss()
 training_model.compile(optimizer=optimizer, loss=identityloss)
